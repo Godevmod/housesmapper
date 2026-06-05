@@ -50,6 +50,7 @@ const els = {
   nextPhotoBtn: document.querySelector("#nextPhotoBtn"),
   mapViewer: document.querySelector("#mapViewer"),
   closeMapBtn: document.querySelector("#closeMapBtn"),
+  closeMapActionBtn: document.querySelector("#closeMapActionBtn"),
   mapFrame: document.querySelector("#mapFrame"),
   mapViewerAddress: document.querySelector("#mapViewerAddress"),
   openYandexMapLink: document.querySelector("#openYandexMapLink"),
@@ -776,6 +777,7 @@ els.clearBtn.addEventListener("click", resetForm);
 els.closeModalBtn.addEventListener("click", closeModal);
 els.closeViewerBtn.addEventListener("click", closeImageViewer);
 els.closeMapBtn.addEventListener("click", closeMapViewer);
+els.closeMapActionBtn.addEventListener("click", closeMapViewer);
 els.prevPhotoBtn.addEventListener("click", showPrevPhoto);
 els.nextPhotoBtn.addEventListener("click", showNextPhoto);
 els.addCommentBtn.addEventListener("click", addComment);

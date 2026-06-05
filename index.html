@@ -139,16 +139,17 @@
 
     <div class="map-viewer" id="mapViewer" aria-hidden="true">
       <div class="map-viewer-backdrop" data-close-map></div>
+      <button class="icon-button map-close-floating" id="closeMapBtn" type="button" title="Закрыть">×</button>
       <section class="map-viewer-panel" role="dialog" aria-modal="true" aria-labelledby="mapViewerTitle">
         <div class="map-viewer-head">
           <div>
             <h2 id="mapViewerTitle">Карта</h2>
             <p id="mapViewerAddress"></p>
           </div>
-          <button class="icon-button" id="closeMapBtn" type="button" title="Закрыть">×</button>
         </div>
         <iframe id="mapFrame" title="Яндекс.Карта" loading="lazy" allowfullscreen></iframe>
         <div class="map-viewer-actions">
+          <button class="secondary" id="closeMapActionBtn" type="button">Закрыть</button>
           <a class="secondary map-link" id="openYandexMapLink" target="_blank" rel="noreferrer">Открыть в Яндекс.Картах</a>
         </div>
       </section>
