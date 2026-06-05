@@ -3,11 +3,14 @@ const DB_VERSION = 1;
 const STORE = "records";
 const PHOTO_MAX_SIZE = 1600;
 const PHOTO_QUALITY = 0.78;
+const PROJECT_ID_KEY = "houses-mappe-project-id";
 
 const state = {
   records: [],
+  projectId: new URLSearchParams(location.search).get("project") || localStorage.getItem(PROJECT_ID_KEY) || "",
   filter: "all",
   addressQuery: "",
+  commentQuery: "",
   dateQuery: "",
   comments: [],
   photos: [],
@@ -32,6 +35,7 @@ const els = {
   recordsList: document.querySelector("#recordsList"),
   counter: document.querySelector("#counter"),
   addressSearch: document.querySelector("#addressSearch"),
+  commentSearch: document.querySelector("#commentSearch"),
   dateSearch: document.querySelector("#dateSearch"),
   resetSearchBtn: document.querySelector("#resetSearchBtn"),
   addRecordBtn: document.querySelector("#addRecordBtn"),
@@ -44,7 +48,15 @@ const els = {
   viewerMeta: document.querySelector("#viewerMeta"),
   prevPhotoBtn: document.querySelector("#prevPhotoBtn"),
   nextPhotoBtn: document.querySelector("#nextPhotoBtn"),
+  mapViewer: document.querySelector("#mapViewer"),
+  closeMapBtn: document.querySelector("#closeMapBtn"),
+  mapFrame: document.querySelector("#mapFrame"),
+  mapViewerAddress: document.querySelector("#mapViewerAddress"),
+  openYandexMapLink: document.querySelector("#openYandexMapLink"),
   exportBtn: document.querySelector("#exportBtn"),
+  loadProjectBtn: document.querySelector("#loadProjectBtn"),
+  saveProjectBtn: document.querySelector("#saveProjectBtn"),
+  shareProjectBtn: document.querySelector("#shareProjectBtn"),
   installBtn: document.querySelector("#installBtn"),
   offlineStatus: document.querySelector("#offlineStatus"),
   template: document.querySelector("#recordTemplate")
@@ -96,7 +108,95 @@ async function saveRecord(record) {
 }
 
 async function deleteRecord(id) {
-  await transact("readwrite", store => store.delete(id));
+  const record = state.records.find(item => item.id === id);
+  if (!record) return;
+
+  const now = new Date().toISOString();
+  await saveRecord({
+    ...record,
+    deletedAt: now,
+    updatedAt: now
+  });
+}
+
+async function mergeRecords(records) {
+  const current = await getAllRecords();
+  const merged = new Map(current.map(record => [record.id, record]));
+
+  records.map(normalizeRecord).forEach(record => {
+    const existing = merged.get(record.id);
+    merged.set(record.id, existing ? mergeRecord(existing, record) : record);
+  });
+
+  const normalized = [...merged.values()];
+  await transact("readwrite", store => {
+    store.clear();
+    normalized.forEach(record => store.put(record));
+  });
+  return normalized.filter(record => !record.deletedAt).length;
+}
+
+function compareRecordUpdatedAt(a, b) {
+  const aTime = Date.parse(a.updatedAt || "") || 0;
+  const bTime = Date.parse(b.updatedAt || "") || 0;
+  return aTime - bTime;
+}
+
+function mergeRecord(existingRecord, incomingRecord) {
+  const existing = normalizeRecord(existingRecord);
+  const incoming = normalizeRecord(incomingRecord);
+  const newer = compareRecordUpdatedAt(incoming, existing) >= 0 ? incoming : existing;
+  const older = newer === incoming ? existing : incoming;
+  const deletedAt = resolveDeletedAt(newer, older);
+
+  return {
+    ...older,
+    ...newer,
+    ...(deletedAt ? { deletedAt } : { deletedAt: undefined }),
+    comments: mergeNestedItems(existing.comments, incoming.comments),
+    photos: mergeNestedItems(existing.photos, incoming.photos),
+    updatedAt: maxIsoDate(existing.updatedAt, incoming.updatedAt) || newer.updatedAt
+  };
+}
+
+function mergeNestedItems(existingItems = [], incomingItems = []) {
+  const merged = new Map();
+  existingItems.forEach(item => merged.set(item.id, item));
+  incomingItems.forEach(item => {
+    const existing = merged.get(item.id);
+    merged.set(item.id, existing ? mergeNestedItem(existing, item) : item);
+  });
+  return [...merged.values()];
+}
+
+function mergeNestedItem(existing, incoming) {
+  const incomingWins = itemTimestamp(incoming) >= itemTimestamp(existing);
+  const newer = incomingWins ? incoming : existing;
+  const older = incomingWins ? existing : incoming;
+  const deletedAt = resolveDeletedAt(newer, older);
+  return {
+    ...older,
+    ...newer,
+    ...(deletedAt ? { deletedAt } : { deletedAt: undefined })
+  };
+}
+
+function resolveDeletedAt(newer, older) {
+  const deletedAt = maxIsoDate(newer.deletedAt, older.deletedAt);
+  if (!deletedAt) return undefined;
+  const deleteTime = Date.parse(deletedAt) || 0;
+  const activeTime = Math.max(itemTimestamp({ ...newer, deletedAt: undefined }), itemTimestamp({ ...older, deletedAt: undefined }));
+  return deleteTime >= activeTime ? deletedAt : undefined;
+}
+
+function itemTimestamp(item) {
+  return Date.parse(item.updatedAt || item.deletedAt || item.createdAt || "") || 0;
+}
+
+function maxIsoDate(...values) {
+  return values
+    .filter(Boolean)
+    .sort((a, b) => (Date.parse(b) || 0) - (Date.parse(a) || 0))[0];
 }
 
 function normalizeRecord(record) {
@@ -162,6 +262,10 @@ function dataUrlSize(dataUrl) {
   return Math.round(base64.length * 0.75);
 }
 
+function activeItems(items = []) {
+  return items.filter(item => !item.deletedAt);
+}
+
 async function handlePhotos(files) {
   const photos = await Promise.all(Array.from(files).map(fileToPhoto));
   state.photos = [...state.photos, ...photos];
@@ -182,27 +286,30 @@ function addComment() {
 }
 
 function removeComment(id) {
-  state.comments = state.comments.filter(comment => comment.id !== id);
+  const now = new Date().toISOString();
+  state.comments = state.comments.map(comment => comment.id === id ? { ...comment, deletedAt: now } : comment);
   renderCommentPreview();
 }
 
 function removePhoto(id) {
-  state.photos = state.photos.filter(photo => photo.id !== id);
+  const now = new Date().toISOString();
+  state.photos = state.photos.map(photo => photo.id === id ? { ...photo, deletedAt: now } : photo);
   renderPhotoPreview();
 }
 
 function renderCommentPreview() {
   els.commentPreview.innerHTML = "";
-  els.commentCount.textContent = String(state.comments.length);
+  const comments = activeItems(state.comments);
+  els.commentCount.textContent = String(comments.length);
 
-  state.comments.forEach(comment => {
+  comments.forEach(comment => {
     els.commentPreview.append(createCommentElement(comment, true));
   });
 }
 
 function renderPhotoPreview() {
   els.photoPreview.innerHTML = "";
-  state.photos.forEach(photo => {
+  activeItems(state.photos).forEach(photo => {
     const item = document.createElement("div");
     item.className = "photo-item";
 
@@ -210,7 +317,7 @@ function renderPhotoPreview() {
     img.className = "photo-preview";
     img.src = photo.dataUrl;
     img.alt = photo.name || "Фото объекта";
-    img.addEventListener("click", () => openImageViewer(state.photos, photo.id));
+    img.addEventListener("click", () => openImageViewer(activeItems(state.photos), photo.id));
 
     const button = document.createElement("button");
     button.className = "photo-remove";
@@ -309,9 +416,11 @@ async function refresh() {
 
 function filteredRecords() {
   return state.records.filter(record => {
+    if (record.deletedAt) return false;
     if (state.filter === "visited" && !record.visited) return false;
     if (state.filter === "pending" && record.visited) return false;
     if (state.addressQuery && !record.address.toLowerCase().includes(state.addressQuery)) return false;
+    if (state.commentQuery && !activeItems(record.comments).some(comment => comment.text.toLowerCase().includes(state.commentQuery))) return false;
     if (state.dateQuery && record.visitDate !== state.dateQuery) return false;
     return true;
   });
@@ -319,15 +428,16 @@ function filteredRecords() {
 
 function renderRecords() {
   const records = filteredRecords();
+  const activeRecords = state.records.filter(record => !record.deletedAt);
   els.recordsList.innerHTML = "";
-  els.counter.textContent = records.length === state.records.length
-    ? `${state.records.length} ${decline(state.records.length, "запись", "записи", "записей")}`
-    : `${records.length} из ${state.records.length}`;
+  els.counter.textContent = records.length === activeRecords.length
+    ? `${activeRecords.length} ${decline(activeRecords.length, "запись", "записи", "записей")}`
+    : `${records.length} из ${activeRecords.length}`;
 
   if (!records.length) {
     const empty = document.createElement("div");
     empty.className = "empty";
-    empty.textContent = state.records.length ? "Ничего не найдено" : "Пока нет записей";
+    empty.textContent = activeRecords.length ? "Ничего не найдено" : "Пока нет записей";
     els.recordsList.append(empty);
     return;
   }
@@ -344,10 +454,12 @@ function renderRecords() {
     title.textContent = record.address || "Без адреса";
     badge.textContent = record.visited ? "посещено" : "новое";
     badge.classList.toggle("done", record.visited);
+    const visibleComments = activeItems(record.comments);
+    const visiblePhotos = activeItems(record.photos);
     meta.textContent = [
       record.visitDate ? `Дата: ${record.visitDate}` : "Дата не указана",
-      `${record.comments.length} ${decline(record.comments.length, "комментарий", "комментария", "комментариев")}`,
-      `${record.photos.length} ${decline(record.photos.length, "фото", "фото", "фото")}`
+      `${visibleComments.length} ${decline(visibleComments.length, "комментарий", "комментария", "комментариев")}`,
+      `${visiblePhotos.length} ${decline(visiblePhotos.length, "фото", "фото", "фото")}`
     ].join(" · ");
 
     if (record.siteUrl) {
@@ -357,26 +469,31 @@ function renderRecords() {
       link.remove();
     }
 
-    record.photos.forEach(photo => {
+    visiblePhotos.forEach(photo => {
       const img = document.createElement("img");
       img.src = photo.dataUrl;
       img.alt = photo.name || "Фото объекта";
-      img.addEventListener("click", () => openImageViewer(record.photos, photo.id));
+      img.addEventListener("click", () => openImageViewer(visiblePhotos, photo.id));
       photos.append(img);
     });
 
-    if (!record.photos.length) {
+    if (!visiblePhotos.length) {
       photos.remove();
       card.style.gridTemplateColumns = "1fr";
     }
 
-    if (record.comments.length) {
-      record.comments.forEach(comment => comments.append(createCommentElement(comment)));
+    if (visibleComments.length) {
+      visibleComments.forEach(comment => comments.append(createCommentElement(comment)));
     } else {
       comments.remove();
     }
 
+    if (!record.address) {
+      card.querySelector(".map").remove();
+    }
+
     card.querySelector(".edit").addEventListener("click", () => editRecord(record));
+    card.querySelector(".map")?.addEventListener("click", () => openMapViewer(record.address));
     card.querySelector(".share").addEventListener("click", () => shareRecord(record));
     card.querySelector(".delete").addEventListener("click", async () => {
       if (!confirm("Удалить запись?")) return;
@@ -449,9 +566,36 @@ function showNextPhoto() {
   renderImageViewer();
 }
 
+function openMapViewer(address) {
+  if (!address) return;
+  els.mapViewerAddress.textContent = address;
+  els.mapFrame.src = buildYandexMapEmbedUrl(address);
+  els.openYandexMapLink.href = buildYandexMapUrl(address);
+  els.mapViewer.classList.add("open");
+  els.mapViewer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeMapViewer() {
+  els.mapViewer.classList.remove("open");
+  els.mapViewer.setAttribute("aria-hidden", "true");
+  els.mapFrame.src = "";
+  if (!els.recordModal.classList.contains("open") && !els.imageViewer.classList.contains("open")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function buildYandexMapEmbedUrl(address) {
+  return `https://yandex.ru/map-widget/v1/?text=${encodeURIComponent(address)}&z=16`;
+}
+
+function buildYandexMapUrl(address) {
+  return `https://yandex.ru/maps/?text=${encodeURIComponent(address)}`;
+}
+
 async function shareRecord(record) {
   const text = buildShareText(record);
-  const files = await photosToFiles(record.photos);
+  const files = await photosToFiles(activeItems(record.photos));
 
   if (navigator.canShare && files.length && navigator.canShare({ files })) {
     try {
@@ -477,7 +621,7 @@ async function shareRecord(record) {
 }
 
 function buildShareText(record) {
-  const comments = record.comments.map(comment => `- ${comment.text}`).join("\n");
+  const comments = activeItems(record.comments).map(comment => `- ${comment.text}`).join("\n");
   return [
     record.address,
     record.visitDate ? `Дата: ${record.visitDate}` : "",
@@ -532,6 +676,95 @@ function exportJson() {
   URL.revokeObjectURL(url);
 }
 
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.error || `HTTP ${response.status}`);
+  }
+  return body;
+}
+
+function setProjectId(projectId) {
+  state.projectId = projectId;
+  localStorage.setItem(PROJECT_ID_KEY, projectId);
+  const url = new URL(location.href);
+  url.searchParams.set("project", projectId);
+  history.replaceState(null, "", url);
+}
+
+function parseProjectId(value) {
+  const trimmed = value.trim();
+  try {
+    const url = new URL(trimmed);
+    return url.searchParams.get("project") || "";
+  } catch {
+    return trimmed;
+  }
+}
+
+function projectShareUrl() {
+  const url = new URL(location.href);
+  url.searchParams.set("project", state.projectId);
+  return url.toString();
+}
+
+async function saveProject() {
+  const payload = JSON.stringify({ records: state.records });
+  const project = state.projectId
+    ? await requestJson(`/api/projects/${encodeURIComponent(state.projectId)}`, { method: "PUT", body: payload })
+    : await requestJson("/api/projects", { method: "POST", body: payload });
+
+  setProjectId(project.id);
+  showStatus(`Проект сохранен: ${project.id}`);
+}
+
+async function loadProject({ silent = false } = {}) {
+  const input = state.projectId || prompt("ID проекта или ссылка");
+  if (!input) return;
+
+  const projectId = parseProjectId(input);
+  if (!projectId) {
+    showStatus("Не удалось распознать ID проекта.");
+    return;
+  }
+
+  const project = await requestJson(`/api/projects/${encodeURIComponent(projectId)}`);
+  const total = await mergeRecords(project.records || []);
+  setProjectId(project.id);
+  await refresh();
+  showStatus(`Проект загружен и объединен: ${total}`);
+}
+
+async function shareProject() {
+  if (!state.projectId) {
+    await saveProject();
+  }
+
+  const url = projectShareUrl();
+  if (navigator.share) {
+    await navigator.share({ title: "Карта домов", url });
+    return;
+  }
+
+  await navigator.clipboard.writeText(url);
+  showStatus("Ссылка скопирована.");
+}
+
+async function runProjectAction(action) {
+  try {
+    await action();
+  } catch (error) {
+    showStatus(error.message || "Ошибка синхронизации.");
+  }
+}
+
 function showStatus(message) {
   els.offlineStatus.textContent = message;
   els.offlineStatus.classList.add("show");
@@ -542,14 +775,23 @@ els.addRecordBtn.addEventListener("click", openAddModal);
 els.clearBtn.addEventListener("click", resetForm);
 els.closeModalBtn.addEventListener("click", closeModal);
 els.closeViewerBtn.addEventListener("click", closeImageViewer);
+els.closeMapBtn.addEventListener("click", closeMapViewer);
 els.prevPhotoBtn.addEventListener("click", showPrevPhoto);
 els.nextPhotoBtn.addEventListener("click", showNextPhoto);
 els.addCommentBtn.addEventListener("click", addComment);
 els.photos.addEventListener("change", event => handlePhotos(event.target.files));
 els.exportBtn.addEventListener("click", exportJson);
+els.saveProjectBtn.addEventListener("click", () => runProjectAction(saveProject));
+els.loadProjectBtn.addEventListener("click", () => runProjectAction(loadProject));
+els.shareProjectBtn.addEventListener("click", () => runProjectAction(shareProject));
 
 els.addressSearch.addEventListener("input", event => {
   state.addressQuery = event.target.value.trim().toLowerCase();
+  renderRecords();
+});
+
+els.commentSearch.addEventListener("input", event => {
+  state.commentQuery = event.target.value.trim().toLowerCase();
   renderRecords();
 });
 
@@ -560,8 +802,10 @@ els.dateSearch.addEventListener("change", event => {
 
 els.resetSearchBtn.addEventListener("click", () => {
   state.addressQuery = "";
+  state.commentQuery = "";
   state.dateQuery = "";
   els.addressSearch.value = "";
+  els.commentSearch.value = "";
   els.dateSearch.value = "";
   renderRecords();
 });
@@ -578,7 +822,17 @@ els.imageViewer.addEventListener("click", event => {
   }
 });
 
+els.mapViewer.addEventListener("click", event => {
+  if (event.target.hasAttribute("data-close-map")) {
+    closeMapViewer();
+  }
+});
+
 window.addEventListener("keydown", event => {
+  if (event.key === "Escape" && els.mapViewer.classList.contains("open")) {
+    closeMapViewer();
+    return;
+  }
   if (event.key === "Escape" && els.imageViewer.classList.contains("open")) {
     closeImageViewer();
     return;
@@ -621,7 +875,7 @@ els.form.addEventListener("submit", async event => {
   addComment();
 
   const record = recordFromForm();
-  if (!record.siteUrl && !record.address && !record.comments.length && !record.photos.length) return;
+  if (!record.siteUrl && !record.address && !activeItems(record.comments).length && !activeItems(record.photos).length) return;
 
   await saveRecord(record);
   resetForm();
@@ -639,7 +893,11 @@ document.querySelectorAll(".filter").forEach(button => {
 
 renderCommentPreview();
 renderPhotoPreview();
-refresh();
+refresh().then(() => {
+  if (state.projectId) {
+    runProjectAction(() => loadProject({ silent: !state.records.length }));
+  }
+});
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   navigator.serviceWorker.register("./sw.js")

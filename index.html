@@ -16,6 +16,9 @@
       </div>
       <div class="top-actions">
         <button class="install-button" id="installBtn" type="button" hidden>Установить</button>
+        <button class="secondary" id="loadProjectBtn" type="button">Загрузить</button>
+        <button class="primary" id="saveProjectBtn" type="button">Сохранить</button>
+        <button class="secondary" id="shareProjectBtn" type="button">Ссылка</button>
         <button class="icon-button" id="exportBtn" type="button" title="Экспорт">
           <span aria-hidden="true">↧</span>
         </button>
@@ -42,6 +45,10 @@
           <label class="field">
             <span>Поиск по адресу</span>
             <input id="addressSearch" type="search" placeholder="Улица, город, район">
+          </label>
+          <label class="field">
+            <span>Поиск по комментариям</span>
+            <input id="commentSearch" type="search" placeholder="Текст комментария">
           </label>
           <label class="field">
             <span>Дата</span>
@@ -130,6 +137,23 @@
       </section>
     </div>
 
+    <div class="map-viewer" id="mapViewer" aria-hidden="true">
+      <div class="map-viewer-backdrop" data-close-map></div>
+      <section class="map-viewer-panel" role="dialog" aria-modal="true" aria-labelledby="mapViewerTitle">
+        <div class="map-viewer-head">
+          <div>
+            <h2 id="mapViewerTitle">Карта</h2>
+            <p id="mapViewerAddress"></p>
+          </div>
+          <button class="icon-button" id="closeMapBtn" type="button" title="Закрыть">×</button>
+        </div>
+        <iframe id="mapFrame" title="Яндекс.Карта" loading="lazy" allowfullscreen></iframe>
+        <div class="map-viewer-actions">
+          <a class="secondary map-link" id="openYandexMapLink" target="_blank" rel="noreferrer">Открыть в Яндекс.Картах</a>
+        </div>
+      </section>
+    </div>
+
     <div class="offline-status" id="offlineStatus" role="status"></div>
 
     <template id="recordTemplate">
@@ -144,6 +168,7 @@
           <div class="record-comments"></div>
           <a class="site-link" target="_blank" rel="noreferrer">Открыть сайт</a>
           <div class="card-actions">
+            <button class="secondary map" type="button">Карта</button>
             <button class="secondary edit" type="button">Изменить</button>
             <button class="secondary share" type="button">Telegram</button>
             <button class="danger delete" type="button">Удалить</button>

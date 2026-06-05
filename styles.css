@@ -42,6 +42,8 @@ textarea {
 .top-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
   flex: 0 0 auto;
 }
@@ -348,7 +350,7 @@ button {
 
 .search-panel {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 180px auto;
+  grid-template-columns: minmax(190px, 1fr) minmax(190px, 1fr) 180px auto;
   align-items: end;
   gap: 10px;
   border-top: 1px solid var(--line);
@@ -476,6 +478,7 @@ body.modal-open {
   overflow: hidden;
 }
 
+.map-viewer,
 .image-viewer {
   position: fixed;
   inset: 0;
@@ -484,15 +487,75 @@ body.modal-open {
   padding: 14px;
 }
 
+.map-viewer.open,
 .image-viewer.open {
   display: grid;
   place-items: center;
 }
 
+.map-viewer-backdrop,
 .image-viewer-backdrop {
   position: absolute;
   inset: 0;
+}
+
+.map-viewer-backdrop {
+  background: rgba(36, 33, 29, 0.56);
+}
+
+.image-viewer-backdrop {
   background: rgba(12, 12, 12, 0.88);
+}
+
+.map-viewer-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(320px, 1fr) auto;
+  width: min(980px, 100%);
+  height: min(760px, calc(100vh - 28px));
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.map-viewer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  padding: 12px;
+}
+
+.map-viewer-head p {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+#mapFrame {
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
+  border: 0;
+}
+
+.map-viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
+  padding: 12px;
+}
+
+.map-link {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0 14px;
+  text-decoration: none;
+  font-weight: 750;
 }
 
 .image-viewer-panel {
@@ -615,10 +678,12 @@ body.modal-open {
     max-height: calc(100vh - 16px);
   }
 
+  .map-viewer,
   .image-viewer {
     padding: 0;
   }
 
+  .map-viewer-panel,
   .image-viewer-panel {
     width: 100%;
     height: 100%;
