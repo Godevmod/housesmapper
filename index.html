@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f7f4ee">
+    <title>Карта домов</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Карта домов</h1>
+        <p>Локальный todo-список домов с фото, датой и заметками</p>
+      </div>
+      <div class="top-actions">
+        <button class="install-button" id="installBtn" type="button" hidden>Установить</button>
+        <button class="icon-button" id="exportBtn" type="button" title="Экспорт">
+          <span aria-hidden="true">↧</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="records">
+        <div class="records-head">
+          <div>
+            <h2>Сохраненные варианты</h2>
+            <span id="counter">0 записей</span>
+          </div>
+          <div class="records-tools">
+            <button class="primary" id="addRecordBtn" type="button">Добавить</button>
+            <div class="filters" role="group" aria-label="Фильтр">
+              <button class="filter active" data-filter="all" type="button">Все</button>
+              <button class="filter" data-filter="pending" type="button">Новые</button>
+              <button class="filter" data-filter="visited" type="button">Посещено</button>
+            </div>
+          </div>
+        </div>
+        <div class="search-panel" role="search">
+          <label class="field">
+            <span>Поиск по адресу</span>
+            <input id="addressSearch" type="search" placeholder="Улица, город, район">
+          </label>
+          <label class="field">
+            <span>Дата</span>
+            <input id="dateSearch" type="date">
+          </label>
+          <button class="ghost" id="resetSearchBtn" type="button">Сбросить</button>
+        </div>
+        <div id="recordsList" class="records-list"></div>
+      </section>
+    </main>
+
+    <div class="modal" id="recordModal" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head">
+          <h2 id="modalTitle">Добавить дом</h2>
+          <button class="icon-button" id="closeModalBtn" type="button" title="Закрыть">×</button>
+        </div>
+
+        <form id="listingForm" autocomplete="off">
+          <input type="hidden" id="recordId">
+
+          <div class="grid">
+            <label class="field">
+              <span>Ссылка на сайт</span>
+              <input id="siteUrl" type="url" placeholder="https://example.com/listing">
+            </label>
+
+            <label class="field">
+              <span>Дата</span>
+              <input id="visitDate" type="date">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Адрес</span>
+            <input id="address" type="text" placeholder="Город, улица, дом">
+          </label>
+
+          <section class="subsection">
+            <div class="subsection-head">
+              <h3>Комментарии</h3>
+              <span id="commentCount">0</span>
+            </div>
+            <label class="field">
+              <span>Новый комментарий</span>
+              <textarea id="commentInput" rows="3" placeholder="Что важно помнить"></textarea>
+            </label>
+            <button class="secondary" id="addCommentBtn" type="button">Добавить комментарий</button>
+            <div class="comment-list" id="commentPreview"></div>
+          </section>
+
+          <label class="check">
+            <input id="visited" type="checkbox">
+            <span>Посещено</span>
+          </label>
+
+          <label class="field">
+            <span>Фотографии</span>
+            <input id="photos" type="file" accept="image/*" multiple>
+          </label>
+
+          <div class="photo-strip" id="photoPreview" aria-live="polite"></div>
+
+          <div class="actions">
+            <button class="primary" type="submit">Сохранить</button>
+            <button class="ghost" id="clearBtn" type="button">Очистить</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="image-viewer" id="imageViewer" aria-hidden="true">
+      <div class="image-viewer-backdrop" data-close-viewer></div>
+      <section class="image-viewer-panel" role="dialog" aria-modal="true" aria-labelledby="imageViewerTitle">
+        <div class="image-viewer-head">
+          <h2 id="imageViewerTitle">Фото</h2>
+          <button class="icon-button" id="closeViewerBtn" type="button" title="Закрыть">×</button>
+        </div>
+        <div class="image-viewer-stage">
+          <button class="viewer-nav prev" id="prevPhotoBtn" type="button" title="Предыдущее фото">‹</button>
+          <img id="viewerImage" alt="Фото объекта">
+          <button class="viewer-nav next" id="nextPhotoBtn" type="button" title="Следующее фото">›</button>
+        </div>
+        <div class="image-viewer-meta" id="viewerMeta"></div>
+      </section>
+    </div>
+
+    <div class="offline-status" id="offlineStatus" role="status"></div>
+
+    <template id="recordTemplate">
+      <article class="record-card">
+        <div class="record-photos"></div>
+        <div class="record-body">
+          <div class="record-title">
+            <h3></h3>
+            <span class="badge"></span>
+          </div>
+          <p class="meta"></p>
+          <div class="record-comments"></div>
+          <a class="site-link" target="_blank" rel="noreferrer">Открыть сайт</a>
+          <div class="card-actions">
+            <button class="secondary edit" type="button">Изменить</button>
+            <button class="secondary share" type="button">Telegram</button>
+            <button class="danger delete" type="button">Удалить</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
